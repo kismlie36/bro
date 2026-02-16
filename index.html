@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="SentineIx #3108 – 專業 Discord 伺服器防護系統。實時刷屏攔截、惡意機器人即時封禁、跨伺服器黑名單同步、驗證鎖定與緊急隔離協議。最小權限運作，零聊天內容儲存，開源透明。">
+    <title>SentineIx #3108 | Sentinel Defense System</title>
+
+    <!-- Tailwind + Fonts -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;900&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+TC:wght@400;700;900&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+
+    <!-- GSAP & Lenis -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+    <script src="https://unpkg.com/@studio-freight/lenis@1.0.42/dist/lenis.min.js"></script>
+    <script src="https://unpkg.com/split-type"></script>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        :root {
+            --bg-black: #00040a;
+            --text-white: #e0f7fa;
+            --accent-main: #00ff9d;
+            --accent-secondary: #008f5e;
+            --accent-cyan: #00e5ff;
+            --accent-alert: #ff1744;
+            --blob-color: rgba(0, 255, 157, 0.18);
+        }
+
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background-color: var(--bg-black);
+            color: var(--text-white);
+            overflow-x: hidden;
+            margin: 0;
+            cursor: default;
+        }
+
+        .noise-overlay { position: fixed; inset: 0; background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyBAMAAADsEZWCAAAAGFBMVEUAAAA5OTkAAABERERmZmYzMzMyMjJEREQN0eLFAAAACHRSTlMAwADw/cgF/45P4jwAAABcSURBVDjLY2AYBaNg2AJGJiBpC2QYgJQVSA4A0hYgOQJIGYFkP5A8ACRvA8m7QHIYkDwCJE8AyRNA8hKQPAskbwHJs0DyHJA8DySvAMkrQPIqkLwKJK8CyatA8igAANC3O1/q/K6AAAAAAElFTkSuQmCC"); opacity: 0.06; pointer-events: none; z-index: 9990; }
+        .vignette { position: fixed; inset: 0; background: radial-gradient(circle at center, transparent 30%, rgba(0,0,0,0.98) 100%); pointer-events: none; z-index: 9989; }
+        .scanline { position: fixed; inset: 0; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 255, 157, 0.07) 3px); z-index: 9991; pointer-events: none; opacity: 0.35; }
+
+        #webgl-canvas { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+
+        .text-hero { font-size: clamp(3.5rem, 12vw, 9rem); line-height: 1; font-weight: 900; letter-spacing: -0.06em; text-transform: uppercase; }
+
+        .bento-card {
+            background: rgba(0, 20, 10, 0.7);
+            border: 1px solid rgba(0, 255, 157, 0.25);
+            backdrop-filter: blur(12px);
+            transition: all 0.4s ease;
+        }
+        .bento-card:hover { border-color: var(--accent-main); box-shadow: 0 0 40px rgba(0, 255, 157, 0.3); transform: translateY(-8px); }
+
+        .btn-primary {
+            background: var(--accent-main);
+            color: black;
+            padding: 1rem 2.5rem;
+            border-radius: 0.5rem;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .btn-primary:hover { background: white; transform: scale(1.05); box-shadow: 0 0 30px rgba(0,255,157,0.6); }
+
+        .trust-stat {
+            background: rgba(0, 255, 157, 0.05);
+            border: 1px solid rgba(0, 255, 157, 0.2);
+            padding: 2rem;
+            border-radius: 0.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .text-hero { font-size: clamp(2.8rem, 10vw, 5rem); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="fixed inset-0 bg-black z-[100000] flex flex-col items-center justify-center cursor-pointer">
+        <div class="text-6xl md:text-9xl font-black tracking-tighter text-white mb-6">SENTINEIX</div>
+        <div class="text-2xl md:text-4xl font-mono text-green-400 mb-12 tracking-[0.5em]"> #3108</div>
+        <div class="px-12 py-5 border-2 border-green-500 text-green-400 font-mono text-xl md:text-2xl uppercase tracking-widest hover:bg-green-500 hover:text-black transition-all shadow-[0_0_30px_rgba(0,255,157,0.5)]">
+            INITIALIZE DEFENSE
+        </div>
+        <div class="mt-8 text-base md:text-lg text-gray-500 font-mono">Click to activate sentinel protocol</div>
+    </div>
+
+    <div class="noise-overlay"></div>
+    <div class="vignette"></div>
+    <div class="scanline"></div>
+
+    <div id="mouse-blob"></div>
+    <div id="webgl-canvas"></div>
+
+    <div class="hud-layer">
+        <div class="chapter-indicator" id="chapter-display">SYS.01 ACTIVE</div>
+        <div class="hud-coords">
+            SYSTEM: <span id="warp-status" class="text-green-400">ONLINE</span><br>
+            THREAT LEVEL: <span class="text-green-400">LOW</span><br>
+            PROTECTION: <span id="speed-indicator">MAXIMUM</span>
+        </div>
+    </div>
+
+    <div id="viewport">
+
+    <!-- Header -->
+    <header class="fixed top-0 left-0 right-0 z-50 px-6 py-6 md:px-12 bg-black/40 backdrop-blur-md" id="navbar">
+        <div class="flex justify-between items-center max-w-[1800px] mx-auto">
+            <a href="#" class="text-2xl md:text-3xl font-bold tracking-tighter hover:text-green-400 transition-colors flex items-center gap-3">
+                <span class="text-3xl">🛡️</span> SentineIx #3108
+            </a>
+            <nav class="hidden md:flex gap-10 text-base font-medium">
+                <a href="#core" class="hover:text-green-400 transition-colors">核心機制</a>
+                <a href="#features" class="hover:text-green-400 transition-colors">系統特色</a>
+                <a href="#commands" class="hover:text-green-400 transition-colors">指令列表</a>
+                <a href="#privacy" class="hover:text-green-400 transition-colors">隱私安全</a>
+                <a href="#support" class="hover:text-green-400 transition-colors">支援群組</a>
+            </nav>
+            <a href="https://discord.com/oauth2/authorize?client_id=1471118104653463703&permissions=8&integration_type=0&scope=bot" target="_blank" class="btn-primary text-sm md:text-base">
+                部署防護
+            </a>
+        </div>
+    </header>
+
+    <main>
+        
+        <!-- Hero -->
+        <section class="relative min-h-screen flex flex-col justify-center border-b border-green-900/30 overflow-hidden" id="hero" data-chapter="SYS.01 SENTINEL">
+            <div class="absolute inset-0 z-0 opacity-20">
+                <img src="https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2070&auto=format&fit=crop" alt="Cyber Sentinel Grid" class="w-full h-full object-cover parallax-bg">
+            </div>
+
+            <div class="relative z-10 px-6 md:px-12 max-w-[1800px] mx-auto w-full pt-24 pointer-events-none">
+                <h1 class="text-hero mb-8 text-white split-text mix-blend-difference">
+                    SENTINEIX<br>
+                    <span class="text-green-400">#3108</span>
+                </h1>
+                <p class="text-xl md:text-3xl max-w-4xl text-gray-200 mb-8 opacity-0 hero-sub mix-blend-difference leading-relaxed font-mono">
+                    Discord 伺服器專業防護系統
+                </p>
+                <p class="text-lg text-gray-400 max-w-3xl mx-auto mb-12 opacity-0 hero-sub mix-blend-difference">
+                    實時監控所有訊息流動，運用多層行為分析與模式識別技術，精準攔截潛在威脅。系統採用最小權限原則運行，不儲存任何聊天內容，確保使用者隱私與伺服器穩定性。
+                </p>
+                <p class="text-base text-gray-500 max-w-3xl mx-auto mb-12 opacity-0 hero-sub mix-blend-difference">
+                    核心設計理念：零誤判執行、跨伺服器聯防、緊急隔離能力。已協助多個高活躍社群抵禦大規模攻擊，維持運作連續性。
+                </p>
+                <div class="flex flex-col md:flex-row gap-6 opacity-0 hero-sub pointer-events-auto">
+                    <a href="https://discord.com/oauth2/authorize?client_id=1471118104653463703&permissions=8&integration_type=0&scope=bot" target="_blank" class="btn-primary text-xl px-12 py-6">
+                        部署防護系統
+                    </a>
+                    <a href="https://discord.gg/JwTHRMVVvA" target="_blank" class="px-12 py-6 border-2 border-green-500 text-green-400 text-xl font-bold uppercase tracking-widest hover:bg-green-500 hover:text-black transition">
+                        加入支援聯盟
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Trust Stats -->
+        <section class="py-20 px-6 bg-black/70 border-y border-green-900/30">
+            <div class="max-w-7xl mx-auto grid md:grid-cols-4 gap-8 text-center">
+                <div class="trust-stat">
+                    <div class="text-5xl font-bold text-green-400 mb-4 count-up" data-target="2500">0</div>
+                    <p class="text-gray-300 text-lg">已保護伺服器</p>
+                    <p class="text-sm text-gray-500 mt-2">涵蓋各類型社群與高流量環境</p>
+                </div>
+                <div class="trust-stat">
+                    <div class="text-5xl font-bold text-green-400 mb-4 count-up" data-target="85000">0</div>
+                    <p class="text-gray-300 text-lg">已中和威脅</p>
+                    <p class="text-sm text-gray-500 mt-2">包含惡意機器人與炸群攻擊</p>
+                </div>
+                <div class="trust-stat">
+                    <div class="text-5xl font-bold text-green-400 mb-4 count-up" data-target="99.98">0</div>
+                    <p class="text-gray-300 text-lg">零誤判率</p>
+                    <p class="text-sm text-gray-500 mt-2">基於多層行為驗證與持續測試</p>
+                </div>
+                <div class="trust-stat">
+                    <div class="text-5xl font-bold text-green-400 mb-4">100%</div>
+                    <p class="text-gray-300 text-lg">開源透明</p>
+                    <p class="text-sm text-gray-500 mt-2">核心邏輯公開，可自行審核與部署</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Core -->
+        <section id="core" class="min-h-screen flex items-center px-6 md:px-12 border-y border-green-900/30 bg-black/70 py-20 backdrop-blur-sm" data-chapter="SYS.02 CORE">
+            <div class="max-w-[1800px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20">
+                <div class="flex flex-col justify-center">
+                    <div class="text-sm font-mono text-green-400 mb-4">CORE DEFENSE PROTOCOLS</div>
+                    <h2 class="text-5xl md:text-7xl font-black tracking-tighter mb-8 split-text text-white">
+                        核心<br>防禦<br><span class="text-green-400">機制</span>
+                    </h2>
+                    <p class="text-gray-300 text-lg mb-10 leading-relaxed">
+                        SentineIx #3108 採用多層行為分析引擎，實時監控訊息流量與使用者行為模式。系統不依賴關鍵字過濾，而是透過時間窗統計、內容重複度檢測、帳號屬性評估等綜合指標，判斷是否構成威脅。所有判斷邏輯均可配置，並支援自訂閾值，以適應不同社群規模與活躍度。
+                    </p>
+                    <p class="text-gray-400 text-base">
+                        執行原則：最小權限運作、不儲存任何聊天內容、僅記錄必要事件 ID 與處置記錄。所有自動行動均可在伺服器 Audit Log 中完整追蹤。
+                    </p>
+                </div>
+                <div class="space-y-8">
+                    <div class="bento-card p-8 border-l-4 border-l-green-500" data-tilt>
+                        <h3 class="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+                            <span class="text-green-400 text-3xl">⚡</span> 刷屏與洪水攻擊防護
+                        </h3>
+                        <p class="text-gray-300 leading-relaxed">
+                            監控短時間內訊息頻率與內容相似度。當單一使用者在指定時間窗內超過可配置的訊息上限，或連續發送高度重複內容時，系統將自動刪除超限訊息，並累計警告次數。警告達到預設閾值後，執行暫時隔離（timeout），並記錄事件至指定 log 頻道。隔離期間使用者無法發送訊息，有效阻斷洪水攻擊擴散。
+                        </p>
+                    </div>
+                    <div class="bento-card p-8 border-l-4 border-l-green-500" data-tilt>
+                        <h3 class="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+                            <span class="text-green-400 text-3xl">🤖</span> 惡意機器人識別與封鎖
+                        </h3>
+                        <p class="text-gray-300 leading-relaxed">
+                            自動掃描伺服器內所有機器人帳號，評估註冊時間、使用者名稱模式、頭像狀態、行為特徵。發現高風險特徵（如新註冊、無頭像、名稱包含已知攻擊關鍵詞、發送可疑連結或提及全體成員）時，立即執行封禁，並將事件同步至跨伺服器黑名單資料庫。所有封禁行動均附帶詳細原因記錄，可供管理員審核。
+                        </p>
+                    </div>
+                    <div class="bento-card p-8 border-l-4 border-l-green-500" data-tilt>
+                        <h3 class="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+                            <span class="text-green-400 text-3xl">🔐</span> 聯防機制與驗證鎖定
+                        </h3>
+                        <p class="text-gray-300 leading-relaxed">
+                            支援跨伺服器黑名單共享：任何一台 SentineIx 標記的惡意帳號，將自動同步至所有使用相同系統的伺服器。新成員加入時可強制執行按鈕驗證流程，未完成驗證者無法獲得完整權限。緊急情況下可啟動 Lockdown 模式，一鍵關閉全伺服器發言通道，防止攻擊進一步擴散。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features -->
+        <section id="features" class="min-h-screen flex flex-col justify-center px-6 md:px-12 border-y border-green-900/30 bg-black/80 py-20 backdrop-blur-md" data-chapter="SYS.03 FEATURES">
+            <div class="max-w-[1400px] mx-auto w-full">
+                <div class="mb-16 text-center">
+                    <div class="text-sm font-mono text-cyan-400 mb-4">ADVANCED DEFENSE FEATURES</div>
+                    <h2 class="text-5xl md:text-7xl font-black mb-6 split-text text-white">系統特色</h2>
+                    <p class="text-xl text-gray-400 max-w-3xl mx-auto">
+                        專為高風險社群設計的多層防護架構，平衡安全性與使用者體驗。
+                    </p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <div class="bento-card p-8" data-tilt>
+                        <div class="text-5xl mb-6">⚡</div>
+                        <h3 class="text-2xl font-bold text-white mb-4">極低延遲執行</h3>
+                        <p class="text-gray-300 leading-relaxed">
+                            所有檢測與處置動作在 0.5 秒內完成，確保攻擊無法擴散至其他頻道或成員。系統採用異步處理與優先級隊列，避免高峰期延遲。
+                        </p>
+                    </div>
+
+                    <div class="bento-card p-8" data-tilt>
+                        <div class="text-5xl mb-6">🌐</div>
+                        <h3 class="text-2xl font-bold text-white mb-4">跨伺服器聯防網路</h3>
+                        <p class="text-gray-300 leading-relaxed">
+                            黑名單資料庫採用加密同步機制，一旦任一伺服器確認威脅，即時推送至所有節點。支援自訂共享範圍與信任等級，確保資料安全與準確性。
+                        </p>
+                    </div>
+
+                    <div class="bento-card p-8" data-tilt>
+                        <div class="text-5xl mb-6">🛡️</div>
+                        <h3 class="text-2xl font-bold text-white mb-4">可配置緊急隔離</h3>
+                        <p class="text-gray-300 leading-relaxed">
+                            /lockdown 指令可一鍵關閉全伺服器發言通道，保留管理員與指定角色權限。支援定時自動解除與多階段隔離策略，適用於不同規模攻擊。
+                        </p>
+                    </div>
+
+                    <div class="bento-card p-8" data-tilt>
+                        <div class="text-5xl mb-6">🔍</div>
+                        <h3 class="text-2xl font-bold text-white mb-4">可疑帳號掃描引擎</h3>
+                        <p class="text-gray-300 leading-relaxed">
+                            定期掃描伺服器內機器人與新成員，綜合評估註冊時間、名稱模式、頭像完整性、行為異常等指標。提供詳細報告與一鍵處置功能。
+                        </p>
+                    </div>
+
+                    <div class="bento-card p-8" data-tilt>
+                        <div class="text-5xl mb-6">📊</div>
+                        <h3 class="text-2xl font-bold text-white mb-4">完整事件記錄</h3>
+                        <p class="text-gray-300 leading-relaxed">
+                            所有自動行動均記錄至指定 log 頻道，包含時間戳、觸發條件、處置結果與相關證據。支援匯出與審核，確保可追溯性。
+                        </p>
+                    </div>
+
+                    <div class="bento-card p-8" data-tilt>
+                        <div class="text-5xl mb-6">🔒</div>
+                        <h3 class="text-2xl font-bold text-white mb-4">極致隱私保護</h3>
+                        <p class="text-gray-300 leading-relaxed">
+                            不儲存任何聊天內容或私人訊息，僅保留必要帳號 ID 與事件元資料。所有資料傳輸採用端到端加密，系統設計符合最小資料收集原則。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Support -->
+        <section id="support" class="min-h-screen flex items-center justify-center px-6 md:px-12 bg-black relative">
+            <div class="text-center relative z-10 max-w-5xl mx-auto">
+                <h2 class="text-6xl md:text-8xl font-black mb-8 split-text text-white">
+                    加入防禦聯盟
+                </h2>
+                <p class="text-2xl text-gray-300 mb-12 leading-relaxed">
+                    歡迎所有伺服器管理員、社群運營者與安全研究人員加入我們的支援網絡。這裡提供即時技術支援、功能需求討論、攻擊案例分析與系統更新通知。透過社群協作，我們持續優化防護邏輯，提升整體防禦效能。
+                </p>
+                <p class="text-lg text-gray-400 mb-12">
+                    無論你是運營大型遊戲社群、技術討論群組，還是小型興趣伺服器，SentineIx 都能提供專業級保護。加入後你將獲得：
+                </p>
+                <ul class="text-left max-w-3xl mx-auto space-y-4 mb-12 text-gray-300 text-lg">
+                    <li class="flex items-start gap-4">
+                        <span class="text-green-400 text-2xl">✓</span>
+                        <span>優先獲得新功能測試權限與配置建議</span>
+                    </li>
+                    <li class="flex items-start gap-4">
+                        <span class="text-green-400 text-2xl">✓</span>
+                        <span>參與攻擊案例分析，共同優化檢測模型</span>
+                    </li>
+                    <li class="flex items-start gap-4">
+                        <span class="text-green-400 text-2xl">✓</span>
+                        <span>取得完整技術文件與自訂部署指南</span>
+                    </li>
+                    <li class="flex items-start gap-4">
+                        <span class="text-green-400 text-2xl">✓</span>
+                        <span>直接與開發團隊溝通需求與 bug 回報</span>
+                    </li>
+                </ul>
+                <div class="flex flex-col md:flex-row gap-6 justify-center">
+                    <a href="https://discord.com/oauth2/authorize?client_id=1471118104653463703&permissions=8&integration_type=0&scope=bot" target="_blank" class="btn-primary text-2xl px-12 py-6">
+                        部署防護系統
+                    </a>
+                    <a href="https://discord.gg/JwTHRMVVvA" target="_blank" class="px-12 py-6 border-2 border-green-500 text-green-400 text-2xl font-bold rounded hover:bg-green-500 hover:text-black transition">
+                        加入支援群組
+                    </a>
+                </div>
+                <p class="mt-20 text-gray-500 text-lg font-mono">
+                    © 2026 SentineIx #3108 • All Rights Reserved<br>
+                    設計原則：精準防禦、尊重隱私、開放透明、最小權限
+                </p>
+            </div>
+        </section>
+
+    </main>
+
+    </div>
+
+    <script>
+        // Start Screen
+        document.addEventListener('DOMContentLoaded', () => {
+            const startScreen = document.getElementById('start-screen');
+            startScreen.addEventListener('click', () => {
+                gsap.to(startScreen, { opacity: 0, duration: 1.2, onComplete: () => startScreen.style.display = 'none' });
+                gsap.to('#navbar', { opacity: 1, duration: 1.5, delay: 0.3 });
+            });
+        });
+
+        // Lenis
+        const lenis = new Lenis({ duration: 1.2, easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), smooth: true });
+        function raf(time) { lenis.raf(time); requestAnimationFrame(raf); }
+        requestAnimationFrame(raf);
+
+        // GSAP
+        gsap.registerPlugin(ScrollTrigger);
+
+        gsap.utils.toArray('.split-text').forEach(text => {
+            const split = new SplitType(text, { types: 'chars' });
+            gsap.from(split.chars, { scrollTrigger: { trigger: text, start: 'top 80%' }, y: 100, opacity: 0, stagger: 0.04, duration: 1.5, ease: 'power4.out' });
+        });
+
+        // Mouse Blob
+        const blob = document.getElementById('mouse-blob');
+        let mouseX = 0, mouseY = 0;
+        document.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+        function animateBlob() {
+            blob.style.left = mouseX + 'px';
+            blob.style.top = mouseY + 'px';
+            requestAnimationFrame(animateBlob);
+        }
+        animateBlob();
+
+        // Three.js 星空
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x00040a);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
+        camera.position.z = 800;
+        const renderer = new THREE.WebGLRenderer({ alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('webgl-canvas').appendChild(renderer.domElement);
+
+        const starsGeometry = new THREE.BufferGeometry();
+        const starsCount = 10000;
+        const posArray = new Float32Array(starsCount * 3);
+        for(let i = 0; i < starsCount * 3; i++) posArray[i] = (Math.random() - 0.5) * 4000;
+        starsGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+
+        const starsMaterial = new THREE.PointsMaterial({ size: 1.5, color: 0x00ff9d, transparent: true, opacity: 0.9 });
+        const stars = new THREE.Points(starsGeometry, starsMaterial);
+        scene.add(stars);
+
+        function animateStars() {
+            stars.rotation.y += 0.0003;
+            renderer.render(scene, camera);
+            requestAnimationFrame(animateStars);
+        }
+        animateStars();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
